@@ -1,0 +1,120 @@
+<head>
+    <style>
+        body {
+            margin: 0;
+        }
+    </style>
+    <script type="text/javascript" src="sankey.json"></script>
+    <script src="https://unpkg.com/3d-force-graph"></script>
+</head>
+
+<body>
+    <div id="3d-graph"></div>
+
+    <script>
+        function readTextFile(file, callback) {
+            var rawFile = new XMLHttpRequest();
+            rawFile.overrideMimeType("application/json");
+            rawFile.open("GET", file, true);
+            rawFile.onreadystatechange = function() {
+                if (rawFile.readyState === 4 && rawFile.status == "200") {
+                    callback(rawFile.responseText);
+                }
+            };
+            rawFile.send(null);
+        }
+
+        // Read File and Display
+        readTextFile("./sankey.json", function(text) {
+            var sankey = JSON.parse(text);
+
+            var node_small = sankey.nodes
+                .filter(
+                    (d) =>
+                    d.group == "1227.d08c7bc9-30b0-4b33-a712-11180780cec5" ||
+                    d.group == "1039.77ef16e2-9be5-4fa8-b322-07f0dd716459" ||
+                    d.group == "1075.ad6aa64a-f43c-4e05-80f3-db084fd3094a" ||
+                    d.group == "1040.1b8f1f78-9c8b-4fbf-aedc-9a19aca03799" ||
+                    d.group == "194.f7540454-972f-42ae-a029-474a6d90d897"
+                )
+                .sort(function(a, b) {
+                    var keyA = a.group,
+                        keyB = b.group;
+                    // Compare the 2 dates
+                    if (keyA < keyB) return -1;
+                    if (keyA > keyB) return 1;
+                    return 0;
+                });
+
+            var nodes_list = node_small.map((d) => d.id);
+
+            var link_small = sankey.links.filter(
+                (d) => nodes_list.includes(d.target) && nodes_list.includes(d.source)
+            );
+
+            let sankey_small = {
+                links: link_small,
+                nodes: node_small,
+            };
+
+            const NODE_REL_SIZE = 5;
+
+            const Graph = ForceGraph3D({
+                    controlType: "orbit",
+                })(document.getElementById("3d-graph"))
+                // Basic Settings
+                .graphData(sankey_small)
+                .nodeLabel("id")
+                .nodeId("id")
+                .nodeVal("size")
+                .nodeOpacity(0.9)
+                .nodeAutoColorBy("group")
+                // Direction Settings
+                .linkDirectionalArrowLength(3.5)
+                .linkDirectionalArrowRelPos(1)
+                .linkCurvature(0.25)
+                // Directional Moving Particles
+                .linkDirectionalParticles("value")
+                .linkDirectionalParticleSpeed((d) => d.value * 0.001)
+                // Curved Lines and Self Links
+                .linkCurvature("curvature")
+                .linkCurveRotation("rotation")
+                .linkDirectionalParticles(2)
+                // Click to Focus on Node
+                .onNodeClick((node) => {
+                    // Aim at node from outside it
+                    const distance = 40;
+                    const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
+
+                    const newPos =
+                        node.x || node.y || node.z ?
+                        {
+                            x: node.x * distRatio,
+                            y: node.y * distRatio,
+                            z: node.z * distRatio,
+                        } :
+                        {
+                            x: 0,
+                            y: 0,
+                            z: distance,
+                        }; // special case if node is in (0,0,0)
+
+                    Graph.cameraPosition(
+                        newPos, // new position
+                        node, // lookAt ({ x, y, z })
+                        3000 // ms transition duration
+                    );
+                })
+                // Fix Node After Dragging
+                .onNodeDragEnd((node) => {
+                    node.fx = node.x;
+                    node.fy = node.y;
+                    node.fz = node.z;
+                })
+                // Canvas Background Color
+                .backgroundColor("#001a33")
+                .nodeRelSize(NODE_REL_SIZE)
+                .linkColor(() => "rgba(255,255,255,1)");
+        });
+    </script>
+</body>
